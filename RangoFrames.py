@@ -1,15 +1,12 @@
 import os
 import cv2
-import random
 import re
 
 # === Configuración de rutas ===
 ruta_base = r"C:\MisArchivos\Escritorio\ClasificadorFrames"
 ruta_videos = os.path.join(ruta_base, "videos")
 ruta_txts = os.path.join(ruta_base, "anotaciones", "txtPruebas")
-out_lick = os.path.join(ruta_base, "dataset", "Lick")
 out_extra = os.path.join(ruta_base, "dataset", "FramesExtraidos")
-os.makedirs(out_lick, exist_ok=True)
 os.makedirs(out_extra, exist_ok=True)
 
 # === Obtener lista de videos .avi ===
@@ -52,46 +49,50 @@ for video_name in videos:
             if line.isdigit():
                 lick_frames_all.append(int(line))
 
-    if not lick_frames_all:
-        print(f"⚠️ No se encontraron frames válidos en {txt_path}, se omite.")
+    if len(lick_frames_all) < 2:
+        print(f"⚠️ No hay suficientes frames en {txt_path}, se omite.")
         continue
 
+    lick_frames_all = sorted(lick_frames_all)
 
-    # Elegir hasta 10 licks aleatorios
-    if len(lick_frames_all) >= 10:
-        lick_frames = sorted(random.sample(lick_frames_all, 10))
-    else:
-        lick_frames = lick_frames_all
+    # Buscar dos frames con diferencia ≥ 3000
+    found_pair = False
+    for i in range(len(lick_frames_all)):
+        for j in range(i + 1, len(lick_frames_all)):
+            if abs(lick_frames_all[j] - lick_frames_all[i]) >= 20000:
+                start_frame = lick_frames_all[i]
+                end_frame = lick_frames_all[j]
+                found_pair = True
+                break
+        if found_pair:
+            break
 
-    print(f"🧪 Frames seleccionados del .txt ({len(lick_frames)}): {lick_frames}")
+    if not found_pair:
+        print(f"⚠️ No se encontraron dos frames con separación ≥ 15000 en {txt_path}")
+        continue
 
-    # === Abrir el video y obtener total de frames
+    print(f"🎯 Rango seleccionado: {start_frame} - {end_frame} ({end_frame - start_frame + 1} frames)")
+
+    # Abrir video
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    guardados = {"Lick": 0, "Extra": 0}
 
-    for frame_id in lick_frames:
-        for offset in range(-3, 4):
-            actual = frame_id + offset
-            if actual < 0 or actual >= total_frames:
-                continue
+    # Asegurar que están dentro del rango del video
+    start_frame = max(0, start_frame)
+    end_frame = min(end_frame, total_frames - 1)
 
-            cap.set(cv2.CAP_PROP_POS_FRAMES, actual)
-            ret, frame = cap.read()
-            if not ret:
-                continue
+    # Extraer frames en el rango
+    guardados = 0
+    for actual in range(start_frame, end_frame + 1):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, actual)
+        ret, frame = cap.read()
+        if not ret:
+            continue
 
-            nombre_frame = f"{nombre_base}_frame_{actual}.png"
-
-            if offset == 0:
-                salida = os.path.join(out_lick, nombre_frame)
-                cv2.imwrite(salida, frame)
-                guardados["Lick"] += 1
-            else:
-                if actual not in lick_frames:
-                    salida = os.path.join(out_extra, nombre_frame)
-                    cv2.imwrite(salida, frame)
-                    guardados["Extra"] += 1
+        nombre_frame = f"{nombre_base}_frame_{actual}.png"
+        salida = os.path.join(out_extra, nombre_frame)
+        cv2.imwrite(salida, frame)
+        guardados += 1
 
     cap.release()
-    print(f"✅ {video_name}: {guardados['Lick']} Lick | {guardados['Extra']} FramesExtraidos\n")
+    print(f"✅ {video_name}: Se guardaron {guardados} frames en FramesExtraidos\n")
