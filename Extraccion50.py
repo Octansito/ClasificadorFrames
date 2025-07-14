@@ -56,10 +56,12 @@ for video_name in videos:
 
     lick_frames_all = sorted(lick_frames_all)
 
-    # Dividir los frames en 15 bloques equidistantes
-    bloque_size = len(lick_frames_all) // 15
+    #Cuando haya mas licks, recortar a 15
+    # Dividir los frames en 50 bloques equidistantes
+    num_licks=50
+    bloque_size = len(lick_frames_all) // 50
     lick_frames_distribuidos = []
-    for i in range(15):
+    for i in range(num_licks):
         start_idx = i * bloque_size
         end_idx = (i + 1) * bloque_size if i < 14 else len(lick_frames_all)
         bloque = lick_frames_all[start_idx:end_idx]
