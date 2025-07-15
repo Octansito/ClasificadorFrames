@@ -57,9 +57,9 @@ for video_name in videos:
     lick_frames_all = sorted(lick_frames_all)
 
     #Cuando haya mas licks, recortar a 15
-    # Dividir los frames en 50 bloques equidistantes
-    num_licks=50
-    bloque_size = len(lick_frames_all) // 50
+    # Dividir los frames en 30 bloques equidistantes o como el usuario desee para extraer más o menos licks
+    num_licks=40
+    bloque_size = len(lick_frames_all) // 20
     lick_frames_distribuidos = []
     for i in range(num_licks):
         start_idx = i * bloque_size
@@ -88,4 +88,4 @@ for video_name in videos:
                 guardados += 1
 
     cap.release()
-    print(f"✅ {video_name}: Se guardaron {guardados} frames alrededor de 15 licks distribuidos\n")
+    print(f"✅ {video_name}: Se guardaron {guardados} frames alrededor de {num_licks} licks distribuidos\n")
