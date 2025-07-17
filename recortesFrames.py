@@ -6,7 +6,7 @@ input_dir = r"C:\MisArchivos\Escritorio\ClasificadorFrames\dataset\Lick"  # Carp
 output_dir = r"C:\MisArchivos\Escritorio\ClasificadorFrames\recortadas\Lick"  # Carpeta para guardar las recortadas
 os.makedirs(output_dir, exist_ok=True)
 
-# === Parámetros de recorte (adaptados a tus imágenes) ===
+# === Parámetros de recorte ===
 # Coordenadas aproximadas en formato (x_inicio, y_inicio, ancho, alto)
 # Puedes ajustar estas coordenadas según la forma del recorte deseado
 crop_box = (150, 150, 250, 220)  # (x, y, w, h)
