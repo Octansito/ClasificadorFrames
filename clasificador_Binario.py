@@ -5,7 +5,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
 from collections import defaultdict
 from tqdm import tqdm
-
+#Análisis hecho por batch de 32
 # === Rutas ===
 ruta_videos = r"C:\MisArchivos\Escritorio\ClasificadorFrames\videos"
 modelo_binario = r"C:\MisArchivos\Escritorio\ClasificadorFrames\dataset\modelo_binario_lick_vs_nolick.h5"
@@ -16,9 +16,11 @@ os.makedirs(salida_base, exist_ok=True)
 model = load_model(modelo_binario)
 
 # === Coordenadas de recorte ===
-x, y, w, h = 50, 73, 500, 333  # Ajustadas según recorte
+x, y, w, h = 50, 73, 500, 333
 
 # === Procesar videos ===
+batch_size = 64
+
 for video_file in os.listdir(ruta_videos):
     if not video_file.endswith('.avi'):
         continue
@@ -28,60 +30,71 @@ for video_file in os.listdir(ruta_videos):
     cap = cv2.VideoCapture(path_video)
 
     salida_txt = os.path.join(salida_base, f"{nombre_video}_clasificacion.txt")
-    carpeta_frames = os.path.join(salida_base, nombre_video)
-    os.makedirs(carpeta_frames, exist_ok=True)
-
-    carpetas = {
-        'Lick': os.path.join(carpeta_frames, 'Lick'),
-        'NoLick': os.path.join(carpeta_frames, 'NoLick')
-    }
-    for carpeta in carpetas.values():
-        os.makedirs(carpeta, exist_ok=True)
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     clasificacion = defaultdict(list)
 
     frame_id = 0
+    batch_imgs = []
+    batch_ids = []
+
     with tqdm(total=total_frames, desc=f"Analizando {video_file}", unit="frame") as pbar:
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
 
-            # Recorte
             recorte = frame[y:y+h, x:x+w]
             recorte = cv2.resize(recorte, (128, 128))
             img_array = img_to_array(recorte) / 255.0
-            img_array = np.expand_dims(img_array, axis=0)
 
-            # Predicción
-            pred = model.predict(img_array, verbose=0)[0][0]
-            label = 'NoLick' if pred >= 0.5 else 'Lick'  #Ponerlo al revés
-            clasificacion[label].append(frame_id)
+            batch_imgs.append(img_array)
+            batch_ids.append(frame_id)
 
-            out_path = os.path.join(carpetas[label], f"frame_{frame_id:04d}.png")
-            #cv2.imwrite(out_path, recorte)  evitamos que se copien los frames
+            frame_id += 1
+            pbar.update(1)
 
-        frame_id += 1
-        pbar.update(1)
+            # Si se completa un batch
+            if len(batch_imgs) == batch_size:
+                batch_array = np.array(batch_imgs)
+                preds = model.predict(batch_array, verbose=0).flatten()
+
+                for i, pred in enumerate(preds):
+                    label = 'NoLick' if pred >= 0.5 else 'Lick'
+                    clasificacion[label].append(batch_ids[i])
+
+                batch_imgs = []
+                batch_ids = []
+
+        # Procesar cualquier lote restante
+        if batch_imgs:
+            batch_array = np.array(batch_imgs)
+            preds = model.predict(batch_array, verbose=0).flatten()
+
+            for i, pred in enumerate(preds):
+                label = 'NoLick' if pred >= 0.5 else 'Lick'
+                clasificacion[label].append(batch_ids[i])
 
     cap.release()
 
-        # === Guardar resultados ===
+    # === Guardar resultados ===
     total = frame_id
     lick_pct = len(clasificacion['Lick']) / total * 100
     nolick_pct = len(clasificacion['NoLick']) / total * 100
 
-    resumen = []
-    resumen.append("Resumen:\n")
-    resumen.append(f"Total frames: {total}\n")
-    resumen.append(f"Lick: {len(clasificacion['Lick'])} ({lick_pct:.2f}%)\n")
-    resumen.append(f"NoLick: {len(clasificacion['NoLick'])} ({nolick_pct:.2f}%)\n\n")
+    resumen = [
+        "Resumen:\n",
+        f"Total frames: {total}\n",
+        f"Lick: {len(clasificacion['Lick'])} ({lick_pct:.2f}%)\n",
+        f"NoLick: {len(clasificacion['NoLick'])} ({nolick_pct:.2f}%)\n\n"
+    ]
 
-    tabla = []
-    tabla.append("Frames clasificados por tipo:\n")
-    tabla.append("Lick       | NoLick\n")
-    tabla.append("-----------------------\n")
+    tabla = [
+        "Frames clasificados por tipo:\n",
+        "Lick       | NoLick\n",
+        "-----------------------\n"
+    ]
+
     max_len = max(len(clasificacion['Lick']), len(clasificacion['NoLick']))
     for i in range(max_len):
         lick_f = clasificacion['Lick'][i] if i < len(clasificacion['Lick']) else ''
@@ -90,6 +103,5 @@ for video_file in os.listdir(ruta_videos):
 
     with open(salida_txt, 'w') as f:
         f.writelines(resumen + tabla)
-
 
 print("✅ Clasificación binaria completada.")
